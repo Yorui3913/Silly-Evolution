@@ -76,7 +76,7 @@ void GenerateCreatures()
     int n = 16;
     for (int i = 0; i < n; i++)
     {
-        CreateCreature(GetRandomValue(0, 120), GetRandomValue(0, 120), ColorFromHSV(i * 360.0f / n, 1.0f, 1.0f));
+        CreateCreature(GetRandomValue(0, 180), GetRandomValue(0, 180), ColorFromHSV(i * 360.0f / n, 1.0f, 1.0f));
     }
 }
 
@@ -114,7 +114,7 @@ void HandleInput()
         camY--;
         if (camY / CHUNKSIZE != (camY + 1) / CHUNKSIZE)
         {
-             for (int xOff = (camX / CHUNKSIZE) - 1; xOff <= ((screenWidth + camX) / CHUNKSIZE) + 1; xOff++)
+            for (int xOff = (camX / CHUNKSIZE) - 1; xOff <= ((screenWidth + camX) / CHUNKSIZE) + 1; xOff++)
                 GenerateChunk(xOff, (camY / CHUNKSIZE) - 1);
         }
     }
@@ -131,7 +131,7 @@ void DrawTiles()
             HASH_FIND(hh, tiles, &key, sizeof(Position), tile);
             if (tile == NULL)
                 continue;
-            
+
             DrawRectangle((tile->key.x - camX) * tileSize, (tile->key.y - camY) * tileSize, tileSize, tileSize, biomeColors[tile->biome]);
         }
     }
@@ -148,7 +148,8 @@ void DrawCreatures()
             HASH_FIND(hh, creatures, &key, sizeof(Position), creature);
             if (creature == NULL)
                 continue;
-            
+
+            DrawCircle((creature->key.x + creature->offset.x + 0.5f - camX) * tileSize, (creature->key.y + creature->offset.y + 0.5f - camY) * tileSize, tileSize * 1.5f, WHITE);
             DrawCircle((creature->key.x + creature->offset.x + 0.5f - camX) * tileSize, (creature->key.y + creature->offset.y + 0.5f - camY) * tileSize, tileSize, creature->color);
         }
     }
@@ -174,6 +175,8 @@ int main()
     // INIT HERE
     InitGen();
     GenerateWorld();
+
+    InitCreatures();
     GenerateCreatures();
 
     while (!WindowShouldClose())
@@ -187,9 +190,10 @@ int main()
 
         // LOGIC HERE
         HandleInput();
-        UpdateCreatures();
+        //UpdateCreatures();
 
         DrawTiles();
+        UpdateCreatures();
         DrawCreatures();
 
         EndDrawing();

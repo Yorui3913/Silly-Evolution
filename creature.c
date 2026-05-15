@@ -1,5 +1,7 @@
 #include "common.h"
 
+Position *closestPositions[CREATURE_VISION_MAX];
+int closestPositionCount[CREATURE_VISION_MAX];
 float baseCreatureSpeed = 0.0125f;
 
 Position *oldCreaturePos;
@@ -40,7 +42,50 @@ void UpdateCreatureVelocity(Creature *creature)
         return;
     }
 
-    for (int off = 0; off < creature->eyesight; off++)
+    // Use the handy lookup table thing I did to search "efficiently"
+    for (int i = 1; i < closestPositionCount[creature->eyesight - 1]; i++)
+    {
+        // What comes next is mirroring the values to account for a quarter circle, alongside flipping it on the x and y axis to count for the whole circle (prob has repeat checks at the 0s but whatever)
+        for (int yMult = 1; yMult >= -1; yMult -= 2)
+        {
+            for (int xMult = 1; xMult >= -1; xMult -= 2)
+            {
+                Position closePos = closestPositions[creature->eyesight - 1][i];
+
+                Position relativePos = {creature->key.x + closePos.x * xMult, creature->key.y + closePos.y * yMult};
+
+                if (DEBUG_CREATUREVISION)
+                    DrawRectangle((relativePos.x - camX) * TILESIZE, (relativePos.y - camY) * TILESIZE, TILESIZE, TILESIZE, (Color){creature->color.r, creature->color.g, creature->color.b, 159});
+
+                HASH_FIND(hh, tiles, &relativePos, sizeof(Position), tileToCheck);
+                if (tileToCheck != NULL && tileToCheck->biome == objective)
+                {
+                    objectivePos = relativePos;
+                    foundObjective = true;
+                    break;
+                }
+
+                Position relativePosRev = {creature->key.x + closePos.y * xMult, creature->key.y + closePos.x * yMult};
+                
+                if (DEBUG_CREATUREVISION)
+                    DrawRectangle((relativePosRev.x - camX) * TILESIZE, (relativePosRev.y - camY) * TILESIZE, TILESIZE, TILESIZE, (Color){creature->color.r, creature->color.g, creature->color.b, 159});
+                
+                HASH_FIND(hh, tiles, &relativePos, sizeof(Position), tileToCheck);
+                if (tileToCheck != NULL && tileToCheck->biome == objective)
+                {
+                    objectivePos = relativePosRev;
+                    foundObjective = true;
+                    break;
+                }
+            }
+            if (foundObjective)
+                break;
+        }
+        if (foundObjective)
+                break;
+    }
+
+    /*for (int off = 0; off < creature->eyesight; off++)
     {
         // ABOVE AND BELLOW CHECK
         for (int xRange = -(off + 1); xRange <= off + 1; xRange++)
@@ -89,7 +134,7 @@ void UpdateCreatureVelocity(Creature *creature)
         }
         if (foundObjective)
             break;
-    }
+    }*/
 
     // Check if the objective was found
     if (foundObjective)
@@ -177,5 +222,60 @@ void UpdateCreatures()
         HASH_DEL(creatures, creature);
         creature->key = newCreaturePos[i];
         HASH_ADD(hh, creatures, key, sizeof(Position), creature);
+    }
+}
+
+void InitCreatures()
+{
+    // VISION LOOKUP TABLE THINGY, GO!
+    // Oh boi is this inneficient, but if it works it works... Right?
+    for (int vision = 1; vision <= CREATURE_VISION_MAX; vision++)
+    {
+        int visionSquared = vision * vision;
+        int *maxCircleLength = (int *)malloc(sizeof(int) * (vision + 1));
+        for (int maxC = 0; maxC <= vision; maxC++)
+            maxCircleLength[maxC] = ceil(sqrt(visionSquared - (maxC * maxC)));
+
+        int sizeThing = vision * vision;
+        int indexer = 0;
+
+        Position *vectorThemselves = (Position *)malloc(sizeof(Position) * sizeThing);
+        float *vectorDistance = (float *)malloc(sizeof(float) * sizeThing);
+        for (int y = 0; y < vision + 1; y++)
+        {
+            if (y >= maxCircleLength[y])
+                break;
+
+            for (int x = y; x < maxCircleLength[y]; x++)
+            {
+                vectorThemselves[indexer] = (Position){x, y};
+                vectorDistance[indexer] = VectorMagnitude((Vector2){x + 1, y + 1});
+                indexer++;
+            }
+        }
+
+        closestPositions[vision - 1] = (Position *)malloc(sizeof(Position) * indexer);
+        closestPositionCount[vision - 1] = indexer;
+        for (int orgLoop = 0; orgLoop < indexer; orgLoop++)
+        {
+            float currentSmallest = -1.0f;
+            int currentSmallestID = -1;
+            for (int org = 0; org < indexer; org++)
+            {
+                if (vectorThemselves[org].x == -1 || (vectorDistance[org] >= currentSmallest && currentSmallest >= 0.0f))
+                    continue;
+
+                currentSmallest = vectorDistance[org];
+                currentSmallestID = org;
+            }
+
+            if (currentSmallestID >= 0)
+            {
+                closestPositions[vision - 1][orgLoop] = vectorThemselves[currentSmallestID];
+                vectorThemselves[currentSmallestID].x = -1;
+            }
+            else
+                closestPositionCount[vision - 1]--;
+        }
     }
 }
