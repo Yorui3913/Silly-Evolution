@@ -2,7 +2,7 @@
 
 Position *closestPositions[CREATURE_VISION_MAX];
 int closestPositionCount[CREATURE_VISION_MAX];
-float baseCreatureSpeed = 0.0125f;
+Vector2 fruitOffset[3] = {{-0.6f, 0.4}, {0.7, 0.55}, {0.2, -0.6}};
 
 Position *oldCreaturePos;
 Position *newCreaturePos;
@@ -24,120 +24,123 @@ Vector2 VectorNormalize(Vector2 vector)
 }
 
 // --ACTUAL CREATURE BEHAVIOUR--
+
+bool CheckCreatureObjective(Creature *creature, Position posToCheck, Objective obj)
+{
+    Bush *bushToCheck;
+    Tile *tileToCheck;
+
+    switch (obj)
+    {
+    case OBJ_FOOD:
+        // Find Food
+        HASH_FIND(hh, bushes, &posToCheck, sizeof(Position), bushToCheck);
+        return bushToCheck != NULL && (bushToCheck->fruits[0] == BUSH_FRUIT_MAX || bushToCheck->fruits[1] == BUSH_FRUIT_MAX || bushToCheck->fruits[2] == BUSH_FRUIT_MAX);
+
+    case OBJ_WATER:
+        // Find water
+        HASH_FIND(hh, tiles, &posToCheck, sizeof(Position), tileToCheck);
+        return tileToCheck != NULL && tileToCheck->biome == BIOME_WATER;
+
+    default:
+        // W H A T
+        return false;
+    }
+}
+
 void UpdateCreatureVelocity(Creature *creature)
 {
     // Set some variables, like what are we even trying to find
-    Biome objective = BIOME_WATER;
+    Objective objectives[OBJ_COUNT];
+    if (creature->hunger > creature->thirst)
+    {
+        objectives[0] = OBJ_FOOD;
+        objectives[1] = OBJ_WATER;
+    }
+    else
+    {
+        objectives[0] = OBJ_WATER;
+        objectives[1] = OBJ_FOOD;
+    }
     Position objectivePos = {0, 0};
-    bool foundObjective = false;
-    Tile *tileToCheck;
+    int foundObjective = -1;
 
     // Is it at the objective already?
     Position thisPos = creature->key;
-    HASH_FIND(hh, tiles, &thisPos, sizeof(Position), tileToCheck);
-    if (tileToCheck != NULL && tileToCheck->biome == objective)
+    for (int obj = 0; obj < OBJ_COUNT; obj++)
     {
-        // Oh wow it is, guess I can skip this whole part now :/
-        creature->velocity = (Vector2){0, 0};
-        return;
-    }
-
-    // Use the handy lookup table thing I did to search "efficiently"
-    for (int i = 1; i < closestPositionCount[creature->eyesight - 1]; i++)
-    {
-        // What comes next is mirroring the values to account for a quarter circle, alongside flipping it on the x and y axis to count for the whole circle (prob has repeat checks at the 0s but whatever)
-        for (int yMult = 1; yMult >= -1; yMult -= 2)
+        if (CheckCreatureObjective(creature, thisPos, objectives[obj]))
         {
-            for (int xMult = 1; xMult >= -1; xMult -= 2)
+            // Oh wow it is, guess I can skip this whole part now :/
+            creature->velocity = (Vector2){0, 0};
+
+            if (objectives[obj] == OBJ_FOOD)
             {
-                Position closePos = closestPositions[creature->eyesight - 1][i];
+                Bush *bushToCheck;
+                HASH_FIND(hh, bushes, &thisPos, sizeof(Position), bushToCheck);
+                if (bushToCheck == NULL)
+                    continue;
 
-                Position relativePos = {creature->key.x + closePos.x * xMult, creature->key.y + closePos.y * yMult};
-
-                if (DEBUG_CREATUREVISION)
-                    DrawRectangle((relativePos.x - camX) * TILESIZE, (relativePos.y - camY) * TILESIZE, TILESIZE, TILESIZE, (Color){creature->color.r, creature->color.g, creature->color.b, 159});
-
-                HASH_FIND(hh, tiles, &relativePos, sizeof(Position), tileToCheck);
-                if (tileToCheck != NULL && tileToCheck->biome == objective)
+                for (int fruit = 0; fruit < 3; fruit++)
                 {
-                    objectivePos = relativePos;
-                    foundObjective = true;
-                    break;
-                }
-
-                Position relativePosRev = {creature->key.x + closePos.y * xMult, creature->key.y + closePos.x * yMult};
-                
-                if (DEBUG_CREATUREVISION)
-                    DrawRectangle((relativePosRev.x - camX) * TILESIZE, (relativePosRev.y - camY) * TILESIZE, TILESIZE, TILESIZE, (Color){creature->color.r, creature->color.g, creature->color.b, 159});
-                
-                HASH_FIND(hh, tiles, &relativePos, sizeof(Position), tileToCheck);
-                if (tileToCheck != NULL && tileToCheck->biome == objective)
-                {
-                    objectivePos = relativePosRev;
-                    foundObjective = true;
-                    break;
+                    if (bushToCheck->fruits[fruit] == BUSH_FRUIT_MAX)
+                    {
+                        creature->hunger = 0;
+                        bushToCheck->fruits[fruit] = 0;
+                        return;
+                    }
                 }
             }
-            if (foundObjective)
+            else if (objectives[obj] == OBJ_WATER)
+                creature->thirst = 0;
+
+            return;
+        }
+
+        // Use the handy lookup table thing I did to search "efficiently"
+        for (int i = 1; i < closestPositionCount[creature->eyesight - 1]; i++)
+        {
+            // What comes next is mirroring the values to account for a quarter circle, alongside flipping it on the x and y axis to count for the whole circle (prob has repeat checks at the 0s but whatever)
+            for (int yMult = 1; yMult >= -1; yMult -= 2)
+            {
+                for (int xMult = 1; xMult >= -1; xMult -= 2)
+                {
+                    Position closePos = closestPositions[creature->eyesight - 1][i];
+
+                    objectivePos.x = creature->key.x + closePos.x * xMult;
+                    objectivePos.y = creature->key.y + closePos.y * yMult;
+                    if (DEBUG_CREATUREVISION)
+                        DrawRectangle((objectivePos.x - camX) * TILESIZE, (objectivePos.y - camY) * TILESIZE, TILESIZE, TILESIZE, (Color){creature->color.r, creature->color.g, creature->color.b, 159});
+
+                    if (CheckCreatureObjective(creature, objectivePos, objectives[obj]))
+                    {
+                        foundObjective = obj;
+                        break;
+                    }
+
+                    objectivePos.x = creature->key.x + closePos.y * xMult;
+                    objectivePos.y = creature->key.y + closePos.x * yMult;
+                    if (DEBUG_CREATUREVISION)
+                        DrawRectangle((objectivePos.x - camX) * TILESIZE, (objectivePos.y - camY) * TILESIZE, TILESIZE, TILESIZE, (Color){creature->color.r, creature->color.g, creature->color.b, 159});
+
+                    if (CheckCreatureObjective(creature, objectivePos, objectives[obj]))
+                    {
+                        foundObjective = obj;
+                        break;
+                    }
+                }
+                if (foundObjective != -1)
+                    break;
+            }
+            if (foundObjective != -1)
                 break;
         }
-        if (foundObjective)
-                break;
+        if (foundObjective != -1)
+            break;
     }
-
-    /*for (int off = 0; off < creature->eyesight; off++)
-    {
-        // ABOVE AND BELLOW CHECK
-        for (int xRange = -(off + 1); xRange <= off + 1; xRange++)
-        {
-            Position abovePos = {creature->key.x + xRange, creature->key.y - (off + 1)};
-            HASH_FIND(hh, tiles, &abovePos, sizeof(Position), tileToCheck);
-            if (tileToCheck != NULL && tileToCheck->biome == objective)
-            {
-                objectivePos = abovePos;
-                foundObjective = true;
-                break;
-            }
-
-            Position bellowPos = {creature->key.x + xRange, creature->key.y + off + 1};
-            HASH_FIND(hh, tiles, &bellowPos, sizeof(Position), tileToCheck);
-            if (tileToCheck != NULL && tileToCheck->biome == objective)
-            {
-                objectivePos = bellowPos;
-                foundObjective = true;
-                break;
-            }
-        }
-        if (foundObjective)
-            break;
-
-        // SIDE CHECK
-        for (int yRange = -off; yRange <= off; yRange++)
-        {
-            Position rightPos = {creature->key.x + off + 1, creature->key.y + yRange};
-            HASH_FIND(hh, tiles, &rightPos, sizeof(Position), tileToCheck);
-            if (tileToCheck != NULL && tileToCheck->biome == objective)
-            {
-                objectivePos = rightPos;
-                foundObjective = true;
-                break;
-            }
-
-            Position leftPos = {creature->key.x - (off + 1), creature->key.y + yRange};
-            HASH_FIND(hh, tiles, &leftPos, sizeof(Position), tileToCheck);
-            if (tileToCheck != NULL && tileToCheck->biome == objective)
-            {
-                objectivePos = leftPos;
-                foundObjective = true;
-                break;
-            }
-        }
-        if (foundObjective)
-            break;
-    }*/
 
     // Check if the objective was found
-    if (foundObjective)
+    if (foundObjective != -1)
     {
         // Get make difference vector, then normalize it and apply it as velocity, it's as shrimple as that :)
         Vector2 diffVector = {objectivePos.x - creature->key.x, objectivePos.y - creature->key.y};
@@ -154,7 +157,7 @@ void UpdateCreaturePosition(Creature *creature)
     Position creaturePos = creature->key;
 
     // X Position and Offset
-    creature->offset.x += creature->velocity.x * baseCreatureSpeed;
+    creature->offset.x += creature->velocity.x * CREATURE_SPEED_BASE;
     if (creature->offset.x > 0.5f)
     {
         creature->offset.x -= 1.0f;
@@ -167,7 +170,7 @@ void UpdateCreaturePosition(Creature *creature)
     }
 
     // Y Position and Offset
-    creature->offset.y += creature->velocity.y * baseCreatureSpeed;
+    creature->offset.y += creature->velocity.y * CREATURE_SPEED_BASE;
     if (creature->offset.y > 0.5f)
     {
         creature->offset.y -= 1.0f;
@@ -192,20 +195,45 @@ void UpdateCreaturePosition(Creature *creature)
 
 void UpdateCreature(Creature *creature)
 {
+    creature->thirst += CREATURE_THIRST_BASE;
+    creature->hunger += CREATURE_HUNGER_BASE;
+    if (creature->thirst > CREATURE_THRIST_MAX || creature->hunger > CREATURE_HUNGER_MAX)
+    {
+        // DEATH
+        HASH_DEL(creatures, creature);
+        return;
+    }
+
     UpdateCreatureVelocity(creature);
     UpdateCreaturePosition(creature);
 }
 
-void UpdateCreatures()
+// --BUSH BEHAVIOUR--
+void UpdateBush(Bush *bush)
 {
+    bush->fruits[0] = min(bush->fruits[0] + BUSH_FRUIT_BASE, BUSH_FRUIT_MAX);
+    bush->fruits[1] = min(bush->fruits[1] + BUSH_FRUIT_BASE, BUSH_FRUIT_MAX);
+    bush->fruits[2] = min(bush->fruits[2] + BUSH_FRUIT_BASE, BUSH_FRUIT_MAX);
+}
+
+void UpdateLife()
+{
+    // BUSHES
+    Bush *bush, *tmpBush;
+    HASH_ITER(hh, bushes, bush, tmpBush)
+    {
+        UpdateBush(bush);
+    }
+
+    // CREATURES
     free(oldCreaturePos);
     free(newCreaturePos);
     oldCreaturePos = (Position *)malloc(sizeof(Position));
     newCreaturePos = (Position *)malloc(sizeof(Position));
     changeCreatureCount = 0;
 
-    Creature *creature, *tmp;
-    HASH_ITER(hh, creatures, creature, tmp)
+    Creature *creature, *tmpCreature;
+    HASH_ITER(hh, creatures, creature, tmpCreature)
     {
         UpdateCreature(creature);
     }
