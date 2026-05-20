@@ -67,6 +67,41 @@ void generateBiomeNoise(UINT8 *grid, int xOff, int yOff, unsigned int heightSeed
     }
 }
 
+void GenerateChunk(int xOff, int yOff)
+{
+    int fixOffX = xOff < 0 ? ((xOff + 1) / CHUNKSIZE - 1) * CHUNKSIZE : (xOff / CHUNKSIZE) * CHUNKSIZE;
+    int fixOffY = yOff < 0 ? ((yOff + 1) / CHUNKSIZE - 1) * CHUNKSIZE : (yOff / CHUNKSIZE) * CHUNKSIZE;
+
+    Tile *check;
+    Position checkPos = {fixOffX, fixOffY};
+    HASH_FIND(hh, tiles, &checkPos, sizeof(Position), check);
+    if (check != NULL)
+        return;
+
+    UINT8 *tileNoise = (UINT8 *)malloc(sizeof(UINT8) * CHUNKSIZE * CHUNKSIZE);
+    generateBiomeNoise(tileNoise, fixOffX, fixOffY, seedHeight, seedTemp);
+
+    for (int y = 0; y < CHUNKSIZE; y++)
+    {
+        for (int x = 0; x < CHUNKSIZE; x++)
+        {
+            Tile *newTile = (Tile *)malloc(sizeof(Tile));
+            newTile->key = (Position){x + fixOffX, y + fixOffY};
+            newTile->biome = (Biome)tileNoise[x + CHUNKSIZE * y];
+            newTile->creatures = (Creature *)malloc(sizeof(Creature));
+
+            newTile->bushExists = false;
+            newTile->bushHasFruit = false;
+            newTile->creatureCount = 0;
+            newTile->creatureHasFunky = false;
+
+            HASH_ADD(hh, tiles, key, sizeof(Position), newTile);
+        }
+    }
+
+    free(tileNoise);
+}
+
 void InitGen()
 {
     biomeColors[BIOME_GRASS] = (Color){0x00, 0xbf, 0x00, 0xff};
