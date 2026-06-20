@@ -11,6 +11,8 @@ int camX;
 int camY;
 int mousePosX;
 int mousePosY;
+bool paused;
+bool advanceFrame;
 
 int seedHeight;
 int seedTemp;
@@ -31,6 +33,20 @@ void HandleInput()
         camY++;
     if (IsKeyDown(KEY_W))
         camY--;
+
+    if (IsKeyPressed(KEY_SPACE))
+        paused = !paused;
+    if (IsKeyPressed(KEY_LEFT_SHIFT))
+        advanceFrame = true;
+
+    if (IsKeyPressed(KEY_R))
+    {
+        for (int i = 0; i < creatureCount; i++)
+            DeleteCreature(creatures[i], false);
+
+        creatureCount = 0;
+        GenerateLife();
+    }
 }
 
 void DrawTiles()
@@ -143,6 +159,7 @@ int main()
 
     InitCreatures();
     GenerateLife();
+    paused = true;
 
     while (!WindowShouldClose())
     {
@@ -153,11 +170,13 @@ int main()
 
         ClearBackground(BLACK);
 
-        // LOGIC HERE
         HandleInput();
-
+        if (!paused || advanceFrame)
+        {
+            UpdateLife();
+            advanceFrame = false;
+        }
         DrawTiles();
-        UpdateLife();
         DrawLife();
 
         EndDrawing();

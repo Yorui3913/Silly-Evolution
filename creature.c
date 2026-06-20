@@ -41,14 +41,11 @@ void DeleteCreature(Creature *creature, bool totalAnihilation)
 
     if (creature->tileID + 1 < thisTile->creatureCount)
     {
-        printf("MOVING BACK! (%d)\n", thisTile->creatureCount);
         for (int i = creature->tileID + 1; i < thisTile->creatureCount; i++)
         {
             thisTile->creatures[i - 1] = thisTile->creatures[i];
             thisTile->creatures[i - 1].tileID--;
             creatures[thisTile->creatures[i - 1].genID] = &(thisTile->creatures[i - 1]);
-            Color c = thisTile->creatures[i - 1].color;
-            printf("[%d] at [%d] of color <%d, %d, %d, %d>\n", thisTile->creatures[i].genID, thisTile->key.x, thisTile->key.y, i - 1, c.r, c.b, c.r, c.a);
         }
     }
     thisTile->creatureCount--;
@@ -65,9 +62,14 @@ Creature *CreateCreature(int xPos, int yPos, Color color, int id)
         HASH_FIND(hh, tiles, &pos, sizeof(Position), tile);
     }
 
+    int tileID = tile->creatureCount;
+    Creature *tileCreaturesTemp = (Creature *)malloc(sizeof(Creature) * (tile->creatureCount + 1));
+    for (int i = 0; i < tileID; i++)
+    {
+        tileCreaturesTemp[i] = tile->creatures[i];
+    }
+    tile->creatures = tileCreaturesTemp;
     tile->creatureCount++;
-    tile->creatures = (Creature *)realloc(tile->creatures, sizeof(Creature) * tile->creatureCount);
-    int tileID = tile->creatureCount - 1;
 
     if (id >= 0)
     {
@@ -287,65 +289,56 @@ void UpdateCreatureObjective(Creature *creature)
     // Use the handy lookup table thing I did to search "efficiently"
     for (int i = 1; i < closestPositionCount[creature->eyesight - 1]; i++)
     {
-        // What comes next is mirroring the values to account for a quarter circle, alongside flipping it on the x and y axis to count for the whole circle (prob has repeat checks at the 0s but whatever)
-        for (int yMult = 1; yMult >= -1; yMult -= 2)
+        Position closePos = closestPositions[creature->eyesight - 1][i];
+        Position posArrayTemp[8] = {
+            (Position){closePos.x, closePos.y},
+            (Position){-closePos.x, closePos.y},
+            (Position){closePos.x, -closePos.y},
+            (Position){-closePos.x, -closePos.y},
+            (Position){closePos.y, closePos.x},
+            (Position){-closePos.y, closePos.x},
+            (Position){closePos.y, -closePos.x},
+            (Position){-closePos.y, -closePos.x},
+        };
+
+        Position posArray[8];
+        for (int p = 0; p < 8; p++)
         {
-            for (int xMult = 1; xMult >= -1; xMult -= 2)
+            int randNum = GetRandomValue(0, 7 - p);
+            posArray[p] = posArrayTemp[randNum];
+            if (randNum == 7 - p)
+                continue;
+
+            for (int r = randNum; r < 7 - p; r++)
+                posArrayTemp[r] = posArrayTemp[r + 1];
+        }
+
+        for (int p = 7; p >= 0; p--)
+        {
+            objectivePos.x = creature->pos.x + posArray[p].x;
+            objectivePos.y = creature->pos.y + posArray[p].y;
+            if (DEBUG_CREATUREVISION)
+                DrawRectangle((objectivePos.x - camX) * TILESIZE, (objectivePos.y - camY) * TILESIZE, TILESIZE, TILESIZE, (Color){creature->color.r, creature->color.g, creature->color.b, 159});
+
+            bool *objectiveCheck = CheckCreatureObjective(creature, objectivePos, creature->mainObj, creature->secObj);
+            for (int obj = 0; obj < 2; obj++)
             {
-                Position closePos = closestPositions[creature->eyesight - 1][i];
-
-                // ---CHECK POS 1---
-                objectivePos.x = creature->pos.x + closePos.x * xMult;
-                objectivePos.y = creature->pos.y + closePos.y * yMult;
-                if (DEBUG_CREATUREVISION)
-                    DrawRectangle((objectivePos.x - camX) * TILESIZE, (objectivePos.y - camY) * TILESIZE, TILESIZE, TILESIZE, (Color){creature->color.r, creature->color.g, creature->color.b, 159});
-
-                bool *objectiveCheck1 = CheckCreatureObjective(creature, objectivePos, creature->mainObj, creature->secObj);
-                for (int obj = 0; obj < 2; obj++)
-                {
-                    ObjectiveType objToCheck = obj ? creature->secObj : creature->mainObj;
-                    if (objToCheck == OBJ_NONE)
-                        break;
-
-                    if (objectiveCheck1[obj])
-                    {
-                        foundObjective = objToCheck;
-                        foundMain = !obj;
-                        break;
-                    }
-                }
-                if (foundMain)
+                ObjectiveType objToCheck = obj ? creature->secObj : creature->mainObj;
+                if (objToCheck == OBJ_NONE)
                     break;
 
-                // ---CHECK POS 2---
-                objectivePos.x = creature->pos.x + closePos.y * xMult;
-                objectivePos.y = creature->pos.y + closePos.x * yMult;
-                if (DEBUG_CREATUREVISION)
-                    DrawRectangle((objectivePos.x - camX) * TILESIZE, (objectivePos.y - camY) * TILESIZE, TILESIZE, TILESIZE, (Color){creature->color.r, creature->color.g, creature->color.b, 159});
-
-                bool *objectiveCheck2 = (bool *)malloc(sizeof(bool) * OBJ_COUNT);
-                objectiveCheck2 = CheckCreatureObjective(creature, objectivePos, creature->mainObj, creature->secObj);
-                for (int obj = 0; obj < 2; obj++)
+                if (objectiveCheck[obj])
                 {
-                    ObjectiveType objToCheck = obj ? creature->secObj : creature->mainObj;
-                    if (objToCheck == OBJ_NONE)
-                        break;
-
-                    if (objectiveCheck2[obj])
-                    {
-                        foundObjective = objToCheck;
-                        foundMain = !obj;
-                        break;
-                    }
-                }
-                if (foundMain)
+                    foundObjective = objToCheck;
+                    foundMain = !obj;
                     break;
+                }
             }
             if (foundMain)
                 break;
         }
         if (foundMain)
-            break;
+                break;
     }
 
     // Check if the objective was found
@@ -375,12 +368,12 @@ void UpdateCreaturePosition(Creature *creature)
     creature->offset.x += creature->velocity.x * CREATURE_SPEED_INC;
     if (creature->offset.x > 0.5f)
     {
-        creature->offset.x -= 1.0f;
+        creature->offset.x -= 0.99f;
         creaturePos.x += 1;
     }
     else if (creature->offset.x < -0.5f)
     {
-        creature->offset.x += 1.0f;
+        creature->offset.x += 0.99f;
         creaturePos.x -= 1;
     }
 
@@ -388,12 +381,12 @@ void UpdateCreaturePosition(Creature *creature)
     creature->offset.y += creature->velocity.y * CREATURE_SPEED_INC;
     if (creature->offset.y > 0.5f)
     {
-        creature->offset.y -= 1.0f;
+        creature->offset.y -= 0.99f;
         creaturePos.y += 1;
     }
     else if (creature->offset.y < -0.5f)
     {
-        creature->offset.y += 1.0f;
+        creature->offset.y += 0.99f;
         creaturePos.y -= 1;
     }
 
