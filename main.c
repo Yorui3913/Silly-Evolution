@@ -11,8 +11,10 @@ int camX;
 int camY;
 int mousePosX;
 int mousePosY;
+
 bool paused;
 bool advanceFrame;
+int frameSpeed = 1;
 
 int seedHeight;
 int seedTemp;
@@ -47,6 +49,11 @@ void HandleInput()
         creatureCount = 0;
         GenerateLife();
     }
+
+    if (IsKeyPressed(KEY_UP))
+        frameSpeed++;
+    if (IsKeyPressed(KEY_DOWN) && frameSpeed > 1)
+        frameSpeed--;
 }
 
 void DrawTiles()
@@ -173,8 +180,11 @@ int main()
         HandleInput();
         if (!paused || advanceFrame)
         {
-            UpdateLife();
             advanceFrame = false;
+            for (int i = 0; i < frameSpeed; i++)
+            {
+                UpdateLife();
+            }
         }
         DrawTiles();
         DrawLife();
