@@ -4,7 +4,7 @@ int trueScreenWidth = 1920;
 int trueScreenHeight = 1080;
 int screenWidth;
 int screenHeight;
-int tileSize;
+int tileSize = 12;
 int fps = 120;
 
 int camX;
@@ -54,6 +54,14 @@ void HandleInput()
         frameSpeed++;
     if (IsKeyPressed(KEY_DOWN) && frameSpeed > 1)
         frameSpeed--;
+    if (IsKeyPressed(KEY_Z))
+        tileSize++;
+    if (IsKeyPressed(KEY_X) && tileSize > 1)
+        tileSize--;
+
+    screenWidth = trueScreenWidth / tileSize;
+    screenHeight = trueScreenHeight / tileSize;
+
 }
 
 void DrawTiles()
@@ -121,6 +129,7 @@ void DrawLife()
                     Vector2 creaturePos = {creature.pos.x + creature.offset.x + 0.5f - camX, creature.pos.y + creature.offset.y + 0.5f - camY};
                     DrawCircle(creaturePos.x * tileSize, creaturePos.y * tileSize, tileSize * 1.5f, outColor);
                     DrawCircle(creaturePos.x * tileSize, creaturePos.y * tileSize, tileSize, creature.color);
+                    DrawRectangle(creaturePos.x * tileSize - tileSize / 4, creaturePos.y * tileSize - tileSize / 4, tileSize / 2, tileSize / 2, creature.color);
                     char buffer[8];
                     sprintf(buffer, "%d", creature.genID);
                     DrawRectangle((creaturePos.x - 0.65f) * tileSize, (creaturePos.y - 3.5f) * tileSize, tileSize * 1.5f, tileSize * 1.2f, BLACK);
@@ -134,7 +143,7 @@ void DrawLife()
                     if (creature.foundMainObj || creature.foundSecObj)
                         for (int yf = -1; yf <= 1; yf++)
                             for (int xf = -1; xf <= 1; xf++)
-                                DrawRectangle((creature.objPos.x - camX + xf) * TILESIZE, (creature.objPos.y - camY + yf) * TILESIZE, TILESIZE, TILESIZE, (Color){255, 0, 0, 255});
+                                DrawRectangle((creature.objPos.x - camX + xf) * tileSize, (creature.objPos.y - camY + yf) * tileSize, tileSize, tileSize, (Color){255, 0, 0, 255});
                 }
             }
         }
@@ -148,7 +157,6 @@ int main()
 
     trueScreenWidth = GetScreenWidth();
     trueScreenHeight = GetScreenHeight();
-    tileSize = TILESIZE;
 
     screenWidth = trueScreenWidth / tileSize;
     screenHeight = trueScreenHeight / tileSize;
@@ -171,16 +179,11 @@ int main()
     while (!WindowShouldClose())
     {
         BeginDrawing();
-
-        screenWidth = trueScreenWidth / tileSize;
-        screenHeight = trueScreenHeight / tileSize;
-
         ClearBackground(BLACK);
 
         HandleInput();
         if (!paused || advanceFrame)
         {
-            advanceFrame = false;
             for (int i = 0; i < frameSpeed; i++)
             {
                 UpdateLife();
@@ -188,6 +191,7 @@ int main()
         }
         DrawTiles();
         DrawLife();
+        advanceFrame = false;
 
         EndDrawing();
     }

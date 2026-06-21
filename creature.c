@@ -67,6 +67,7 @@ Creature *CreateCreature(int xPos, int yPos, Color color, int id)
     for (int i = 0; i < tileID; i++)
     {
         tileCreaturesTemp[i] = tile->creatures[i];
+        creatures[tileCreaturesTemp[i].genID] = &tileCreaturesTemp[i];
     }
     tile->creatures = tileCreaturesTemp;
     tile->creatureCount++;
@@ -318,7 +319,7 @@ void UpdateCreatureObjective(Creature *creature)
             objectivePos.x = creature->pos.x + posArray[p].x;
             objectivePos.y = creature->pos.y + posArray[p].y;
             if (DEBUG_CREATUREVISION)
-                DrawRectangle((objectivePos.x - camX) * TILESIZE, (objectivePos.y - camY) * TILESIZE, TILESIZE, TILESIZE, (Color){creature->color.r, creature->color.g, creature->color.b, 159});
+                DrawRectangle((objectivePos.x - camX) * tileSize, (objectivePos.y - camY) * tileSize, tileSize, tileSize, (Color){creature->color.r, creature->color.g, creature->color.b, 159});
 
             bool *objectiveCheck = CheckCreatureObjective(creature, objectivePos, creature->mainObj, creature->secObj);
             for (int obj = 0; obj < 2; obj++)

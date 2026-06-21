@@ -88,7 +88,6 @@ typedef struct Tile
 
 #define DEBUG_CREATUREVISION false
 
-#define TILESIZE 12
 #define CHUNKSIZE 16
 
 // ---CREATURE [START]---
@@ -120,6 +119,8 @@ extern int camX;
 extern int camY;
 extern int screenWidth;
 extern int screenHeight;
+extern int tileSize;
+
 extern int seedHeight;
 extern int seedTemp;
 extern float noiseFreq;
